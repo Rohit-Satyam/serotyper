@@ -17,14 +17,14 @@ B --> F[SE]
 
 
 F -- optional --> G[pycoQC]
-F -- dehosting --> H[HOSTILE] -- Chimera Read Removal--> I[YACRD] -- Serotyping --> J[VirStrain + Alignment + Coverage]
-I -- assembly --> K[Canu/Flye/Both + Polishing + Scaffolding]
-J --> K
+F -- dehosting --> H[HOSTILE] -- Chimera Read Removal--> I[YACRD] -- Serotyping/Coverage/Bacterial read removal --> J[VirStrain + Alignment + Coverage] -- assembly --> K[Canu/Flye/Both + Polishing + Scaffolding]
+
 K --> BLASTN --> Serotyping
 
 B --> L[PE]
 
 L --> FASTQC
-L --> Deshosting --> N[Adapter Trimming] -- Serotyping --> M[VirStrain + Alignment + Coverage] 
-N -- assembly --> P[Unicycler/SPADES/Both] --> BLASTN 
+L --> Deshosting --> N[Adapter Trimming] --> J
+J -- assembly --> P[Unicycler/SPADES/Both] --> BLASTN 
 ```
+
