@@ -1,3 +1,4 @@
+![](assets/logo.png)
 # serotyper
 Pipeline for Viral Serotyping
 
