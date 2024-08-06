@@ -24,7 +24,7 @@ chmod +x Miniconda3-latest-Linux-x86_64.sh
 ## Once conda is installed, restart the terminal and install mamba for quick dependency installation
 conda install -n base -c conda-forge -c bioconda mamba
 ```
-> Note: Skip this step if you already have Conda or Anaconda installed
+> Note: Skip this step if you already have Conda or Anaconda installed. But don't forget to install mamba
 
 ### Cloning the repository and organizing the data
 
@@ -41,6 +41,9 @@ conda activate serotyper
 
 ### Download pre-prepared indexes
 
+The pipeline requires Virstrain indexes of the virus as a mandatory input. For Dengue and FMD Virus, these can be procured from [here](https://zenodo.org/records/13235270). However, if users are interested in any other virus, they are encouraged to check out Virstrain [documentation](https://github.com/liaoherui/VirStrain) on generating the indexes. We will post a separate documentation about how one can generate the indexes and metadata soon. 
+
+Once downloaded, uncompress the indexes in the `db` directory. You can keep these indexes elsewhere as well, but don't forget to give the absosulte path when running the pipeline.
 
 
 ## Step 1: Indexing Custom genome for dehosting
