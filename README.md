@@ -41,12 +41,16 @@ conda activate serotyper
 
 ### Download pre-prepared indexes
 
-The pipeline requires Virstrain indexes of the virus as a mandatory input. For Dengue and FMD Virus, these can be procured from [here](https://zenodo.org/records/13235270). However, if users are interested in any other virus, they are encouraged to check out Virstrain [documentation](https://github.com/liaoherui/VirStrain) on generating the indexes. We will post a separate documentation about how one can generate the indexes and metadata soon. 
+The pipeline requires Virstrain indexes of the virus as a mandatory input. For Dengue and FMD Virus, these can be procured from [here](https://zenodo.org/records/13235270). The indexes also include BlastN indexes, metadata file for all the genomes, and MSA files. However, if users are interested in any other virus, they are encouraged to check out Virstrain [documentation](https://github.com/liaoherui/VirStrain) on generating the indexes. We will post a separate documentation about how one can generate the indexes and metadata soon. 
 
-Once downloaded, uncompress the indexes in the `db` directory. You can keep these indexes elsewhere as well, but don't forget to give the absosulte path when running the pipeline.
+Once downloaded, uncompress the indexes in the `db` directory for sanity. You can keep these indexes elsewhere as well but don't forget to give the absolute path when running the pipeline.
 
 
 ## Step 1: Indexing Custom genome for dehosting
+
+>Skip this step if your sample host was human origin.
+
+In the case of the FMD Virus and other viruses, it becomes necessary to tell the pipeline which files to use for dehosting. By default, human is used but since the FMDV samples are of Bovine origin, we need to provide the indexes. This step is also necessary, if your input data is Amplicon or SISPA
 
 ```
 bowtie2-build --threads 20 Bos_taurus.ARS-UCD1.3.dna.toplevel.fa  Bos_taurus.ARS-UCD1.3.dna.toplevel.fa
