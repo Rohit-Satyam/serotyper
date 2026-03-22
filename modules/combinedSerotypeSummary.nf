@@ -11,11 +11,11 @@ process COMBINESEROTYPESUMMARY{
     path(summaryFiles)
     each path(meta)
     output:
-        path ("all_samples_summary.tsv")
+        path ("all_samples_summary_virstrain.tsv"), emit: summaryreport1
     shell:
 '''
 metadataHeader=$(head -n 1 !{meta} )
-echo 'SampleName,Reference_Genome_Length,Horizontal_coverage_(>=20X),Base_Sequenced,'$metadataHeader | tr ', ' "\t" > all_samples_summary.tsv
-cat !{summaryFiles} >> all_samples_summary.tsv
+echo 'SampleName,Reference_Genome_Length,Horizontal_coverage_(>=20X),Base_Sequenced,'$metadataHeader | tr ', ' "\t" > all_samples_summary_virstrain.tsv
+cat !{summaryFiles} >> all_samples_summary_virstrain.tsv
 '''
 }

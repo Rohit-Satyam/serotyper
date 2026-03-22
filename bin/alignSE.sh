@@ -1,7 +1,8 @@
 
 ## Get the Virstrain best hit name
 first=$(grep '>' $1 | head -n 2 | grep Cluster | awk '{print $1}' | sed 's/>//g')
-seqkit grep -p $first $2 | sed 's/-//g' | awk '/^>/ {print (NR==1?"":"\n")$0; next} {printf "%s", $0} END {print ""}' | fold -w 60 > ${6}.${first}.fasta
+seqkit grep -p $first $2 | sed '/^>/! s/-//g' | awk '/^>/ {print (NR==1?"":"\n")$0; next} {printf "%s", $0} END {print ""}' | fold -w 60 > ${6}.${first}.fasta ## Ensuring we don't mess up dash in the header
+
 
 samtools faidx ${6}.${first}.fasta
 endCoord=$(awk '{print $2}' ${6}.${first}.fasta.fai)
