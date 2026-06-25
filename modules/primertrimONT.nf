@@ -17,6 +17,7 @@ process ALIGNTRIM{
   output:
   tuple val(sid), path("${sid}_primertrimmed.bam"), path("${ref}"), path("${sid}_primertrimmedlowcoverage.bed"), path("${aligntrimbed}"), emit: trimmed
   path("${sid}_report.tsv"), emit: report
+   path "versions.yml", emit: versions
         
     shell:
 
@@ -36,5 +37,13 @@ samtools sort trimmed.bam -@ !{task.cpus} -o !{sid}_primertrimmed.bam
 samtools index !{sid}_primertrimmed.bam
 covtobed -x !{params.cov} !{sid}_primertrimmed.bam  > !{sid}_primertrimmedlowcoverage.bed
 
+  cat <<-END_VERSIONS > versions.yml
+  "!{task.process}":
+    align_trim: $(align_trim --version 2>&1 | head -n 1 || true)
+    xlsx2csv: $(xlsx2csv --version 2>&1 | head -n 1 || true)
+    csvformat: $(csvformat --version 2>&1 | head -n 1 || true)
+    samtools: $(samtools --version 2>&1 | head -n 1)
+    covtobed: $(covtobed --version 2>&1 | head -n 1 || true)
+  END_VERSIONS
  '''
 }

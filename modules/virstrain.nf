@@ -17,7 +17,7 @@ process VIRSTRAIN_CALL {
         each path(pathdb)
 
     output:
-        tuple val(sid), path("${sid}.VirStrain_report.txt"), path(reads), path(pathdb), emit: report_for_align
+        tuple val(sid), path("${sid}.VirStrain_report.txt"), path(reads), emit: report_for_align
         path("${sid}.Mps_ps_depth.csv"), optional: true
         path("${sid}.Ops_ps_depth.csv"), optional: true
         path("${sid}.VirStrain_report.html"), optional: true
@@ -38,7 +38,7 @@ process VIRSTRAIN_CALL {
     """
     else
     """
-    virstrain \
+      virstrain \
         -i ${reads} \
         -d ${pathdb} \
         -o .
@@ -64,10 +64,10 @@ process VIRSTRAIN_ALIGN_BESTMATCH {
     ) ? filename : null
 }
 
-    conda "bioconda::samtools bioconda::seqkit bioconda::minimap2=2.30 bioconda::bwa-mem2 bioconda::samplot bioconda::covtobed"
+    conda "bioconda::samtools bioconda::seqkit bioconda::mm2plus bioconda::bwa-mem2 bioconda::samplot bioconda::covtobed"
 
     input:
-        tuple val(sid), path(vs_report), path(reads), path(pathdb)
+        tuple val(sid), path(vs_report), path(reads)
         each path(meta)
 
     output:
@@ -87,16 +87,12 @@ process VIRSTRAIN_ALIGN_BESTMATCH {
     """
     ${projectDir}/bin/alignPE.sh \
         ${vs_report} \
-        ${pathdb.toRealPath()}/*.aln \
+        ${params.db}/*.aln \
         ${task.cpus} \
         ${reads[0].toRealPath()} \
         ${reads[1].toRealPath()} \
         ${sid} \
         ${meta}
-
- 
-   
-
     ## if alignPE.sh writes the serotype file already, keep it; otherwise derive a placeholder
     [[ -f ${sid}.serotype.txt ]] || awk 'NR==2 {print \$1}' ${vs_report} > ${sid}.serotype.txt
     """
@@ -104,13 +100,13 @@ process VIRSTRAIN_ALIGN_BESTMATCH {
     """
     ${projectDir}/bin/alignSE.sh \
         ${vs_report} \
-        ${pathdb.toRealPath()}/*.aln \
+        ${params.db}/*.aln \
         ${task.cpus} \
         ${params.minimap_ext} \
         ${reads} \
         ${sid} \
         ${meta}
-
+## if alignPE.sh writes the serotype file already, keep it; otherwise derive a placeholder
     [[ -f ${sid}.serotype.txt ]] || awk 'NR==2 {print \$1}' ${vs_report} > ${sid}.serotype.txt
     """
 }

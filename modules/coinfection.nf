@@ -8,7 +8,7 @@ process CONCATREFS{
 
 script:
 """
-cat ${params.referenceDir}/*.fasta > all.fasta
+cat ${fasta_files} > all.fasta
 """
 
 }
@@ -24,7 +24,8 @@ process MAP_AND_SELECT_CONTIGS {
     path ref_fasta
 
     output:
-    tuple val(sid), path(reads), path("${sid}.allcontigs.bam"), path("${sid}.coverage.tsv"), path("${sid}.selected_contigs.tsv", optional: true)
+    tuple val(sid), path(reads), path("${sid}.allcontigs.bam"), path("${sid}.coverage.tsv"), path("${sid}.selected_contigs.tsv", optional: true), emit: mapandselectout
+    path "versions.yml", emit: versions
 
     script:
     def minReads  = params.min_reads_coinf ?: 500
@@ -34,12 +35,12 @@ process MAP_AND_SELECT_CONTIGS {
     """
     set -euo pipefail
 
-    minimap2 -ax ${params.minimap_ext} ${ref_fasta} ${reads} 2> ${sid}.minimap2.log \\
+    mm2plus -ax ${params.minimap_ext} ${ref_fasta} ${reads} 2> ${sid}.minimap2.log \\
         | samtools sort -@ ${task.cpus} -o ${sid}.allcontigs.bam -
 
     samtools index ${sid}.allcontigs.bam
 
-    samtools coverage -q 1 --min-depth 5 --ff UNMAP,QCFAIL ${sid}.allcontigs.bam > ${sid}.coverage.tsv
+    samtools coverage -q 1 --min-depth ${minDepth} --ff UNMAP,QCFAIL ${sid}.allcontigs.bam > ${sid}.coverage.tsv
 
     awk -F'\\t' -v minReads=${minReads} -v minCov=${minCov} -v minDepth=${minDepth} '
         BEGIN { OFS="\\t" }
@@ -52,14 +53,22 @@ process MAP_AND_SELECT_CONTIGS {
         }
     ' ${sid}.coverage.tsv > ${sid}.selected_contigs.tmp.tsv
 
-    # keep selected_contigs.tsv only if it has >2 data lines excluding header
-    data_lines=\$(awk 'NR>1 && NF>0 {c++} END {print c+0}' ${sid}.selected_contigs.tmp.tsv)
-
+    # keep selected_contigs.tsv only if it has >2 data lines including header
+    data_lines=\$(wc -l  ${sid}.selected_contigs.tmp.tsv | awk '{print \$1}')
+    
     if [ "\$data_lines" -gt 2 ]; then
         mv ${sid}.selected_contigs.tmp.tsv ${sid}.selected_contigs.tsv
     else
         rm -f ${sid}.selected_contigs.tmp.tsv
+        echo -e "${sid}\tpossibly not coinfection\tOnly 1 serotype or contig passed thresholds"
     fi
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      mm2plus: \$(mm2plus --version 2>&1 | head -n 1 || true)
+      samtools: \$(samtools --version 2>&1 | head -n 1)
+      awk: "system"
+    END_VERSIONS
     """
 }
 
@@ -69,14 +78,15 @@ process REMAP_TO_SELECTED_CONTIG {
     memory '24 GB'
     publishDir "${params.outdir}/coinfection/02_remap_per_contig", mode: 'copy'
 
-    //conda "bioconda::seqkit bioconda::minimap2 bioconda::samtools"
+    //conda "bioconda::seqkit bioconda::mm2plus bioconda::samtools"
 
     input:
     tuple val(sid), val(contig), path(reads)
     path ref_fasta
 
     output:
-    tuple val(sid), val(contig), path("${sid}.${contig}.fa"), path("${sid}.${contig}.bam")
+    tuple val(sid), val(contig), path("${sid}.${contig}.fa"), path("${sid}.${contig}.bam"), emit:remap2selectedcontig
+    path "versions.yml", emit: versions
 
     script:
     """
@@ -85,10 +95,16 @@ process REMAP_TO_SELECTED_CONTIG {
     seqkit grep -nrp "${contig}" ${ref_fasta} > ${sid}.${contig}.fa
     samtools faidx ${sid}.${contig}.fa
 
-    minimap2 -ax ${params.map_preset ?: 'lr:hq'} ${sid}.${contig}.fa ${reads} 2> ${sid}.${contig}.minimap2.log \
+    mm2plus -ax ${params.minimap_ext} ${sid}.${contig}.fa ${reads} 2> ${sid}.${contig}.minimap2.log \
         | samtools sort -@ ${task.cpus} -o ${sid}.${contig}.bam -
 
     samtools index ${sid}.${contig}.bam
+        cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      seqkit: \$(seqkit version 2>&1 | head -n 1 | sed 's/^seqkit //')
+      samtools: \$(samtools --version 2>&1 | head -n 1)
+      mm2plus: \$(mm2plus --version 2>&1 | head -n 1 || true)
+    END_VERSIONS
     """
 }
 
@@ -106,7 +122,8 @@ process RUN_CLAIR3_PER_CONTIG {
     tuple val(sid), val(contig), path(ref), path(bam)
 
     output:
-    tuple val(sid), val(contig), path(ref), path(bam), path("${sid}.${contig}_clair3")
+    tuple val(sid), val(contig), path(ref), path(bam), path("${sid}.${contig}_clair3"), emit: runclair3percontig
+    path "versions.yml", emit: versions
 
     script:
     """
@@ -118,7 +135,10 @@ process RUN_CLAIR3_PER_CONTIG {
         --model_path=${params.clair3model} \\
         --output=${sid}.${contig}_clair3 \\
         ${params.clair3_ext ?: ''}
-
+cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      clair3: \$(run_clair3.sh --version 2>&1 | head -n 1 || true)
+    END_VERSIONS
     """
 }
 
@@ -136,9 +156,9 @@ process BUILD_CONTIG_CONSENSUS {
 
     output:
     tuple val(sid), val(contig), path("${sid}.${contig}.fasta"), path("${sid}.${contig}.normalized.clair3.vcf.gz"), path("${sid}.${contig}.lowcov.bed"), path("${sid}.${contig}.clair3.log")
-
+    path "versions.yml", emit: versions
     script:
-    def minDepth = params.meandepth ?: 5
+    def minDepth = params.meandepth ?: 20
 
     """
     set -euo pipefail
@@ -161,5 +181,11 @@ process BUILD_CONTIG_CONSENSUS {
         ${sid}.${contig}.normalized.clair3.vcf.gz
 
     cp ${clair3dir.toRealPath()}/run_clair3.log ${sid}.${contig}.clair3.log
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      covtobed: \$(covtobed --version 2>&1 | head -n 1 || true)
+      bcftools: \$(bcftools --version 2>&1 | head -n 1 | sed 's/^bcftools //')
+      tabix: \$(tabix --version 2>&1 | head -n 1 || true)
+    END_VERSIONS
     """
 }

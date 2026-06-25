@@ -1,11 +1,8 @@
+
 params.memory = "3g"
 params.cpus = 1
 params.outdir = "."
-
-
 process RNAVIRALSPADES{
-    cpus params.cpus
-    memory params.memory
     publishDir "${params.outdir}/05_rnaviralSpadesAssembly/", mode: 'copy'
 
 
@@ -20,53 +17,43 @@ process RNAVIRALSPADES{
         path("*.png")
         path("*.html")
         path("*.tsv")
+        path "versions.yml", emit: versions
 
     script:
-    def spades_ext = params.spades_ext ? params.spades_ext : ""
-    if ("${params.mode}" == "PE")
+   def spades_ext = params.spades_ext ? params.spades_ext : ""
+   def assemble_cmd = mode == 'PE'
+        ? """
+          rnaviralspades.py -1 ${reads[0]} -2 ${reads[1]} --threads ${task.cpus} -o . ${spades_ext}
+          """
+        : """
+          rnaviralspades.py -s ${reads[0]} --nanopore --threads ${task.cpus} -o . ${spades_ext}
+          """
+  
   """
-  rnaviralspades.py -1 ${reads[0]} -2 ${reads[1]} --threads ${task.cpus} \
-  -o . ${spades_ext}
-
-  mv scaffolds.fasta ${sid}.scaffolds.fasta
-  mv assembly_graph_with_scaffolds.gfa ${sid}.assembly_graph_with_scaffolds.gfa
-  mv assembly_graph_after_simplification.gfa ${sid}.assembly_graph_after_simplification.gfa
-  mv spades.log ${sid}.spades.log
-
-  ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[2]} ${sid}.scaffolds.fasta
-  #sed -i "s/_RagTag/_RagTag_${sid}/g" ${sid}.ragtag.scaffold.fasta
-  awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
-
-  pgv-pmauve ${reads[2]} ${sid}.ragtag.scaffold.fasta \
+    ${assemble_cmd}
+    mv scaffolds.fasta ${sid}.scaffolds.fasta
+    [ -f assembly_graph_with_scaffolds.gfa ] && mv assembly_graph_with_scaffolds.gfa ${sid}.assembly_graph_with_scaffolds.gfa
+    [ -f assembly_graph_after_simplification.gfa ] && mv assembly_graph_after_simplification.gfa ${sid}.assembly_graph_after_simplification.gfa
+    [ -f spades.log ] && mv spades.log ${sid}.spades.log
+    
+    ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[2]} ${sid}.scaffolds.fasta
+    awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
+    
+    pgv-pmauve ${reads[2]} ${sid}.ragtag.scaffold.fasta \
    -o pgmauve --block_cmap viridis --track_align_type left  \
    --show_scale_xticks --curve
 
-  mv pgmauve/result.png ${sid}.mauveresult.png
-  mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
-  mv pgmauve/result.html ${sid}.mauveresult.html
-  mv pgmauve/pgv-cli.log ${sid}.mauve.log
-  """
-  else
-  """
-  rnaviralspades.py -s ${reads[0]} --nanopore --threads ${task.cpus}\
-  -o . ${spades_ext}
-
-  mv scaffolds.fasta ${sid}.scaffolds.fasta
-  mv assembly_graph_with_scaffolds.gfa ${sid}.assembly_graph_with_scaffolds.gfa
-  mv assembly_graph_after_simplification.gfa ${sid}.assembly_graph_after_simplification.gfa
-  mv spades.log ${sid}.spades.log
-
-  ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[1]} ${sid}.scaffolds.fasta
-  awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
-
-  pgv-pmauve ${reads[1]} ${sid}.ragtag.scaffold.fasta \
-   -o pgmauve --block_cmap viridis --track_align_type left  \
-   --show_scale_xticks --curve
-
-  mv pgmauve/result.png ${sid}.mauveresult.png
-  mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
-  mv pgmauve/result.html ${sid}.mauveresult.html
-  mv pgmauve/pgv-cli.log ${sid}.mauve.log
+    [ -f pgmauve/result.png ]        && mv pgmauve/result.png ${prefix}.mauveresult.png
+    [ -f pgmauve/align_coords.tsv ]  && mv pgmauve/align_coords.tsv ${prefix}.mauvealign_coords.tsv
+    [ -f pgmauve/result.html ]       && mv pgmauve/result.html ${prefix}.mauveresult.html
+    [ -f pgmauve/pgv-cli.log ]       && mv pgmauve/pgv-cli.log ${prefix}.mauve.log
+    
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      rnaviralspades: \$(rnaviralspades.py --version 2>&1 | sed 's/.*SPAdes genome assembler v//; s/ .*//')
+      ragtag: \$(ragtag.py --version 2>&1 | head -n 1 | sed 's/^RagTag //')
+      pgv_pmauve: \$(pgv-pmauve --version 2>&1 | head -n 1 | sed 's/^v//')
+    END_VERSIONS
   """
 }
 
@@ -87,36 +74,47 @@ process UNICYCLER{
     path("*.png")
     path("*.html")
     path("*.tsv")
+    path "versions.yml", emit: versions
 
     script:
-  if ("${params.mode}" == "PE")
-"""
-  unicycler -1 ${reads[0]} -2 ${reads[1]} -o . --linear_seqs 1 --keep 0
-  mv assembly.fasta ${sid}.scaffolds.fasta
-  mv assembly.gfa ${sid}.assembly_graph_with_scaffolds.gfa
-  mv unicycler.log ${sid}.unicycler.log
+    def assemble_cmd = mode == 'PE'
+        ? "unicycler -1 ${reads[0]} -2 ${reads[1]} -o . --linear_seqs 1 --keep 0"
+        : "unicycler -l ${reads[0]} -o . --linear_seqs 1 --keep 0"
 
-  ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[2]} ${sid}.scaffolds.fasta
-  awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
+    def downstream = mode == 'PE'
+        ? """
+          ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[2]} ${sid}.scaffolds.fasta
 
-  pgv-pmauve ${reads[2]} ${sid}.ragtag.scaffold.fasta \
-   -o pgmauve --block_cmap viridis --track_align_type left  \
-   --show_scale_xticks --curve
+          awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
 
-  mv pgmauve/result.png ${sid}.mauveresult.png
-  mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
-  mv pgmauve/result.html ${sid}.mauveresult.html
-  mv pgmauve/pgv-cli.log ${sid}.mauve.log
+          pgv-pmauve ${reads[2]} ${sid}.ragtag.scaffold.fasta \\
+          -o pgmauve --block_cmap viridis --track_align_type left  \\
+          --show_scale_xticks --curve
+
+        [ -f pgmauve/result.png ]       && mv pgmauve/result.png ${sid}.mauveresult.png
+        [ -f pgmauve/align_coords.tsv ] && mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
+        [ -f pgmauve/result.html ]      && mv pgmauve/result.html ${sid}.mauveresult.html
+        [ -f pgmauve/pgv-cli.log ]      && mv pgmauve/pgv-cli.log ${sid}.mauve.log
+          """
+        : """
+          ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[1]} ${sid}.scaffolds.fasta
+          awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
+          """
 """
-else
-"""
-unicycler -l ${reads[0]} -o . --linear_seqs 1 --keep 0
+${assemble_cmd}
+
 mv assembly.fasta ${sid}.scaffolds.fasta
-mv assembly.gfa ${sid}.assembly_graph_with_scaffolds.gfa
-mv unicycler.log ${sid}.unicycler.log
+[ -f assembly.gfa ]    && mv assembly.gfa ${sid}.assembly_graph_with_scaffolds.gfa
+[ -f unicycler.log ]   && mv unicycler.log ${sid}.unicycler.log
 
-ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[1]} ${sid}.scaffolds.fasta
-awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
+${downstream}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      unicycler: \$(unicycler --version 2>&1 | sed 's/^Unicycler v//')
+      ragtag: \$(ragtag.py --version 2>&1 | head -n 1 | sed 's/^RagTag //')
+      pgv_pmauve: \$(pgv-pmauve --version 2>&1 | head -n 1 | sed 's/^v//')
+    END_VERSIONS
 """
 }
 
@@ -137,6 +135,7 @@ process FLYE{
     path("*.png")
     path("*.html")
     path("*.tsv")
+    path "versions.yml", emit: versions
 
     script:
     def flye_ext = params.flye_ext ? params.flye_ext : ""
@@ -145,7 +144,7 @@ flye --threads ${task.cpus} --genome-size ${params.genomesize} --out-dir . --sca
 ${flye_ext} ${reads[1]}
 
 ## One time polishing with Racon
-minimap2 assembly.fasta ${reads[1]} \
+mm2plus assembly.fasta ${reads[1]} \
  > minimap.racon.paf
 
 racon -t ${task.cpus} ${reads[1]} \
@@ -168,6 +167,14 @@ mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
 mv pgmauve/result.html ${sid}.mauveresult.html
 mv pgmauve/pgv-cli.log ${sid}.mauve.log
 
+cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      flye: \$(flye --version 2>&1 | head -n 1 | sed 's/^.* //')
+      mm2plus: \$(mm2plus --version 2>&1 | head -n 1 || echo "unknown")
+      racon: \$(racon --version 2>&1 | head -n 1 | sed 's/^v//')
+      ragtag: \$(ragtag.py --version 2>&1 | head -n 1 | sed 's/^RagTag //')
+      pgv_pmauve: \$(pgv-pmauve --version 2>&1 | head -n 1 | sed 's/^v//')
+    END_VERSIONS
 """
 
 }
@@ -189,6 +196,7 @@ process CANU{
     path("*.png")
     path("*.html")
     path("*.tsv")
+    path "versions.yml", emit: versions
 
     script:
     def canu_ext = params.canu_ext ? params.canu_ext : ""
@@ -202,7 +210,7 @@ len=\$(${projectDir}/bin/getGeoLength.sh ${reads[1]} ${task.cpus})
 canu -p ${sid} minReadLength=\$len minOverlapLength=\$len genomeSize=${params.genomesize} ${canu_ext} ${reads[1]}
 
 ## One time polishing with Racon
-minimap2 ${sid}.contigs.fasta ${reads[1]} \
+mm2plus ${sid}.contigs.fasta ${reads[1]} \
  > minimap.racon.paf
 
 racon -t ${task.cpus} ${reads[1]} \
@@ -225,6 +233,15 @@ mv pgmauve/result.png ${sid}.mauveresult.png
 mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
 mv pgmauve/result.html ${sid}.mauveresult.html
 mv pgmauve/pgv-cli.log ${sid}.mauve.log
+
+ cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      canu: \$(canu --version 2>&1 | head -n 1 | sed 's/^Canu //')
+      mm2plus: \$(mm2plus --version 2>&1 | head -n 1 || echo "unknown")
+      racon: \$(racon --version 2>&1 | head -n 1 | sed 's/^v//')
+      ragtag: \$(ragtag.py --version 2>&1 | head -n 1 | sed 's/^RagTag //')
+      pgv_pmauve: \$(pgv-pmauve --version 2>&1 | head -n 1 | sed 's/^v//')
+    END_VERSIONS
 """
 
 }

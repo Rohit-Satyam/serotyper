@@ -35,7 +35,7 @@ cat tmp | while read p; do
     ref_name=$(basename "$p" | cut -f 1 -d'.')
 
     # Align the FASTQ sample against the current reference using minimap2 and store the BAM file
-    minimap2 -ax ${minimap_ext} "$p" "$fastq_file" 2> "${ref_name}_minimap.output.log" \
+    mm2plus -ax ${minimap_ext} "$p" "$fastq_file" 2> "${ref_name}_minimap.output.log" \
     | samtools sort -@ ${cpus} -o "${sample_name}_${ref_name}.bam"
 
     samtools index -@ ${cpus} "${sample_name}_${ref_name}.bam" ## Because clair3 requires it.

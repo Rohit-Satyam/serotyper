@@ -7,7 +7,7 @@ seqkit grep -p $first $2 | sed '/^>/! s/-//g' | awk '/^>/ {print (NR==1?"":"\n")
 samtools faidx ${6}.${first}.fasta
 endCoord=$(awk '{print $2}' ${6}.${first}.fasta.fai)
 
-minimap2 -ax $4 ${6}.${first}.fasta $5 2> $first.minimap.output.log | samtools sort -@ $3 - |samtools view -F 4 -@ $3 -bS -o $6.bam
+mm2plus -ax $4 ${6}.${first}.fasta $5 2> $first.minimap.output.log | samtools sort -@ $3 - |samtools view -F 4 -@ $3 -bS -o $6.bam
 
 samtools fastq -n $6.bam > ${6}.fq
 
