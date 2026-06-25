@@ -23,6 +23,11 @@ chmod +x Miniconda3-latest-Linux-x86_64.sh
 
 ## Once conda is installed, restart the terminal and install mamba for quick dependency installation
 conda install -n base -c conda-forge -c bioconda mamba
+
+## Install packages
+virstrain_build -i mafft.aln -d . -s 0.6
+makeblastdb -in 03_combinedfasta.fasta -dbtype nucl -out denv_blastn_db -title "DENV_database"
+mamba create -n serotyper bioconda::samtools bioconda::seqkit bioconda::minimap2 bioconda::bwa-mem2 bioconda::samplot bioconda::covtobed bioconda::yacrd bioconda::minimap2 conda-forge::parallel bioconda::bcftools conda-forge::gsl bioconda::tabix bioconda::clair3 bioconda::blast  bioconda::hostile bioconda::nextflow multiqc csvkit align_trim
 ```
 > Note: Skip this step if you already have Conda or Anaconda installed. But don't forget to install mamba
 

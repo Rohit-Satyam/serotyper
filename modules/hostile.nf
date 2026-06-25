@@ -12,7 +12,8 @@ process HOSTILE{
 
     output:
 		tuple val(sid), path("*clean*.fastq.gz")
-
+        path "${sid}.log"
+        path "versions.yml", emit: versions
 
         script:
 
@@ -23,6 +24,11 @@ if ("${params.mode}" == "PE")
 hostile clean --fastq1 ${reads[0]} --fastq2 ${reads[1]} --threads ${task.cpus} \
     ${hostile_ext} \
     2> ${sid}.log
+
+     cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      hostile: \$(hostile --version 2>&1 | head -n 1 || true)
+    END_VERSIONS
     """
 else
 
@@ -30,5 +36,9 @@ else
 hostile clean --fastq1 ${reads} --threads ${task.cpus} \
     ${hostile_ext} \
     2> ${sid}.log
+ cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      hostile: \$(hostile --version 2>&1 | head -n 1 || true)
+    END_VERSIONS
 """
 }

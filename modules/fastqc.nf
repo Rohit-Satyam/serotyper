@@ -32,10 +32,14 @@ process MULTIQC {
 
     output:
     path "*"
-
+    path "versions.yml", emit: versions
     script:
     """
     multiqc --force --config ${projectDir}/bin/multiqc_config.yaml --filename ${filename} ${filepaths}
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      multiqc: \$(multiqc --version 2>&1 | head -n 1)
+    END_VERSIONS
     """
 }
 
@@ -49,10 +53,17 @@ process PYCOQC{
 
     output:
         path "*"
+        path "versions.yml", emit: versions
     script:
     """
     pycoQC -f ${summaryfile.toRealPath()} -o ${sid}.pycoqc.html --min_pass_len 100
 
     NanoPlot --summary  ${summaryfile.toRealPath()} --loglength -o ${sid}.nanoplot_log_transformed
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+      pycoqc: \$(pycoQC --version 2>&1 | head -n 1 || true)
+      nanoplot: \$(NanoPlot --version 2>&1 | head -n 1 || true)
+    END_VERSIONS
     """
 }

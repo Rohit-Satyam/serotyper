@@ -1,0 +1,289 @@
+---
+title: "Dengue serotyping database"
+author: "Rohit Satyam"
+date: "2026-01-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 1a: Loading files
+
+Fetch the latest data from [nextstrain](https://github.com/nextstrain/dengue/tree/main/phylogenetic).
+
+```{r cars}
+library(Biostrings)
+library(data.table)
+library(dplyr)
+meta_url  <- "https://data.nextstrain.org/files/workflows/dengue/metadata_all.tsv.zst"
+fasta_url <- "https://data.nextstrain.org/files/workflows/dengue/sequences_all.fasta.zst"
+
+meta_zst  <- "metadata_all.tsv.zst"
+fasta_zst <- "sequences_all.fasta.zst"
+download.file(meta_url,  destfile = meta_zst,  mode = "wb")
+download.file(fasta_url, destfile = fasta_zst, mode = "wb")
+
+
+meta_tsv  <- sub("\\.zst$", "", meta_zst)
+fasta_fa  <- sub("\\.zst$", "", fasta_zst)
+
+system(sprintf("zstd -d -f %s -o %s", meta_zst, meta_tsv))
+system(sprintf("zstd -d -f %s -o %s", fasta_zst, fasta_fa))
+
+
+metadata <- fread(meta_tsv)
+
+```
+## Step 1b. Map SRR Ids to Yale Samples
+
+We nood the Yale samples for benchmarking our pipeline so we need to map the SRR number with the accession number. To do that we first retrive the metadata of SRR using efetch utils using the following command.
+
+```
+esearch -db sra -query SRR27846280 | efetch -format runinfo >> srr_metadata.csv
+esearch -db sra -query SRR27846281 | efetch -format runinfo >> srr_metadata.csv
+```
+
+We used regex such as `DENV4/Viet_Nam/` to retrieve the nuccore summary files containing the titles of the genome submitted and save them separately for all dengue types. We then convert these files into csv file as follows. 
+
+```
+## To convert the nuccore files into tsv files
+awk -v OFS="\t" '
+  NF==0 { next }                     # skip empty lines
+  { a[++k]=$0 }                      # collect non-empty lines
+  k==3 {
+    print a[1], a[2], a[3]
+    k=0
+  }
+  END {
+    if (k!=0) {
+      print "ERROR: trailing incomplete record (need 3 lines)" > "/dev/stderr"
+      exit 1
+    }
+  }
+' denv1_nuccore.txt
+```
+
+We the manually edit the resulting files and get `denv_all_hit.tsv` and `finalSrrmeta.csv`. We will now load and combine these two and exclude these assemblies to 
+```{r, eval=FALSE}
+
+srr <- read.csv("/data/dengueproj/data/yale_samples/finalSrrmeta.csv")
+accession <- read.csv("/data/dengueproj/data/yale_samples/denv_all_hit.tsv", sep = "\t", header = F)
+## merging both
+
+mergedf <- S4Vectors::merge(srr, accession, by.x="Sample.1", by.y= "V2", all.x=TRUE, )
+table(is.na(mergedf$V4))
+write.csv(mergedf,"mergedf.csv")
+```
+
+27 samples doesn't have accession numbers. These were added manually.
+
+```{r}
+yale <- read.csv("mergedfYale_edited.csv")
+yale$V4 <- GeneStructureTools::removeVersion(yale$V4)
+```
+
+## Step 3: Getting additional sequences from GISAID from 2023-2026 (Jan 2026)
+
+```{r}
+gisaid_2324 <- fread("gisaid_denv_2023-2024.tsv")
+
+gisaid_2526 <- fread("gisaid_denv_2025-2026.tsv")
+
+gisaid <- rbind(gisaid_2324,gisaid_2526)
+
+gisaid$Serotype <- gsub("DENV","denv",gisaid$Serotype)
+gisaid$country <- stringr::str_split(gisaid$`Virus name`, pattern = "/", simplify = T) %>% .[, 2]
+
+## Check which countries are absent from nextstrain
+unique(gisaid$country)[!(gisaid$country %>% unique() %in% unique(metadata$country))]
+gisaid$country <- mgsub::mgsub(gisaid$country, c("Reunion","Cote","Saint Barthelemy" ),c("Réunion","Côte","Saint Barthélemy"))
+```
+
+Let's get rid of the duplicate sequence. Also choose one minor lineage for sequence where more than one is provided (the first one  here)
+```{r}
+gisaid$Lineage[grep("/",gisaid$Lineage)]
+gisaid$Lineage <- stringr::str_split(gisaid$Lineage, pattern = "/", simplify = T) %>% .[, 1]
+unique(gisaid$Lineage) %in% unique(metadata$minor_lineage)
+
+## We need to remove same sequences coming from both sources. We will use genotype and date and genome length and country information to remove 
+metadata$uniquekey <- paste(metadata$date,metadata$length,metadata$minor_lineage, metadata$country)
+gisaid$uniquekey <- paste(gisaid$`Collection date`,gisaid$`Sequence Length`,gisaid$Lineage, gisaid$country)
+table(gisaid$uniquekey %in% metadata$uniquekey)
+summary(gisaid$`Sequence Length`)
+```
+
+We have 2145 duplicate entries. We will get rid of them and retain only the unique ones (i.e. 10822)
+
+
+```{r}
+gisaid <- subset(gisaid, !(uniquekey %in% metadata$uniquekey))
+rm(sequences_2324,sequences_2526,gisaid_2324,gisaid_2526)
+```
+Finally check if the GISAID have yale samples or not
+
+```{r}
+gisaidyale <- grep("Yale-D",gisaid$`Virus name`, value = T) %>% gsub('hDenV1/Colombia/|hDenV2/Colombia/|un-',"",.) %>% stringr::str_split(pattern = '/', simplify = T) %>% .[,1]
+table(gisaidyale %in% yale$Sample.1)
+
+saveRDS(list(yale=yale, gisaid=gisaid, metadata=metadata),"step1.rds")
+```
+Since these samples are not present in yale dataset we intend to use for benchmark, we will retain them.
+
+## Step2: Filter sequences
+
+1. We will filter the outlier sequences.
+2. Filter sequences smaller than 8000 bp but check if this threshold removes some major lineages or not.
+3. Remove too large sequence as they can have plasmid contamination.
+4. Remove patent and vaccine sequences (this has already been removed I from nextstrain for dengue but might be bit of manual labor to do first).
+
+```{r}
+exclude <- read.csv("https://raw.githubusercontent.com/nextstrain/dengue/refs/heads/main/phylogenetic/defaults/exclude.txt",header = F,skip = 1, sep = "#")
+exclude$V1 <- trimws(exclude$V1)
+
+## Excluding these sequences
+metadata <- subset(metadata, !(accession %in% exclude$V1) & genotype !="unassigned" )
+majorlineages <- unique(metadata$major_lineage)
+```
+
+We removed some dengue vaccine sequences and some sequences of unverified origins.Interestingly there is only 1 sequence `KR919820` with genotype 1VI, identified in 2016 that will be removed so we will add it to the egene as well.
+
+```{r}
+## Removing sequences that have less than 8kb genome lengths
+metadata_8kb <- subset(metadata, length>=8000 & genotype !="")
+metadata_8kb_withoutYale <-subset(metadata_8kb, !(accession %in% yale$V4 ))
+#metadata_egene <- subset(metadata, length<8000 & E_coverage >= 0.7 & genotype !="")
+setdiff(majorlineages,unique(metadata_8kb$major_lineage))
+setdiff(majorlineages,unique(metadata_8kb_withoutYale$major_lineage))
+#setdiff(majorlineages,unique(metadata_egene$major_lineage))
+#setdiff(majorlineages,unique(metadata_8kb_withoutYale$major_lineage))
+#metadata_egene <- rbind(subset(metadata, genotype=="1VI"),metadata_egene)
+saveRDS(list(metadata_8kb=metadata_8kb, metadata_8kb_withoutYale=metadata_8kb_withoutYale, metadata=metadata, gisaid=gisaid),"step2.rds")
+```
+
+## Subset the sequences and metadata
+
+Now that we have chosen our sequences post basic QC, let's combine them
+
+```{r}
+library(GeneStructureTools)
+metadata_8kb <- metadata_8kb[, c("accession","date","country","genotype","major_lineage","minor_lineage")]
+metadata_8kb_withoutYale <- metadata_8kb_withoutYale[, c("accession","date","country","genotype","major_lineage","minor_lineage")]
+
+gisaid$genotype <- paste0(gsub("denv","",gisaid$Serotype),gisaid$Genotype)
+gisaid$major_lineage <- removeVersion(gisaid$Lineage)
+gisaid <- gisaid[,c("Virus name","Collection date","country","genotype","major_lineage","Lineage")]
+colnames(gisaid) <- colnames(metadata_8kb)
+
+combinedmeta <- rbind(gisaid,metadata_8kb)
+combinedmetawithoutYale <- rbind(gisaid,metadata_8kb_withoutYale)
+combinedmeta$accession <- gsub(" ","_", combinedmeta$accession)
+combinedmetawithoutYale$accession <- gsub(" ","_", combinedmetawithoutYale$accession)
+saveRDS(list(combinedmeta=combinedmeta, combinedmetawithoutYale=combinedmetawithoutYale),"step3.rds")
+```
+
+## Subsetting the sequences
+
+We combine the GISAID sequences and Nextstrain sequences and perform deduplication using vsearch:
+
+```
+cat sequences_all.fasta gisaid.fasta | vsearch --derep_fulllength /dev/stdin --output drep.fasta
+```
+```{r}
+seqs <- readDNAStringSet("02_drep.fasta")
+
+## Because gisaid seq header doesn't have space and use underscore instead
+names(seqs) <- names(seqs) %>% stringr::str_split(pattern = "[|]", simplify = T) %>% .[, 1]
+#names(sequencesgisaid) <- mgsub::mgsub(names(sequencesgisaid), c("Reunion","Cote","Saint Barthelemy" ),c("Réunion","Côte","Saint Barthélemy"))
+
+seqs1 <- seqs[intersect(names(seqs),combinedmeta$accession)]
+seqs2 <- seqs[intersect(names(seqs),combinedmetawithoutYale$accession)]
+
+
+## How many unique samples we have from gisaid
+table(grepl("hDen", intersect(names(seqs),combinedmetawithoutYale$accession))) # 9924
+
+writeXStringSet(seqs1, "03_combinedfasta.fasta")
+writeXStringSet(seqs2, "03_combinedfastawithoutYale.fasta")
+write.csv(combinedmeta, "04_combinedmeta.csv", row.names = FALSE)
+write.csv(combinedmetawithoutYale, "04_combinedmetawithoutYale.csv", row.names = FALSE)
+```
+
+We took samples only from 2023 onwards because: https://gisaid.org/collaborations/arbovirus-researchers-unite/#:~:text=Arbovirus%20researchers%20unite:%20expanding%20genomic,109X(23)00325%2DX
+
+## Removing the sequences with high N content
+
+```
+seqtk comp input.fa | awk '{x=$3+$4+$5+$6;y=$2;print $1,y-x,y,(y-x)/y}' OFS='\t'> completness_summary_drep.tsv
+
+## Sum of all bases=$3+$4+$5+$6
+## y= Length of the genome
+## $1 is the name of the genome
+## y-x is number of Ns or non-atgc nucleotides
+## length of genome
+## proportion of Ns
+```
+
+Finally we wish to remove sequences which have a lot of N content and non-canonical bases other than ATGC because high N-content sequences messes up MSA and Virstrain database building  process. we use Seqktk for that. The length recorded by databases therefore might not always be reliable. we will also remove outgroup genotypes labelled as "1Outgroup" "2Outgroup" by gisaid.
+
+```{r}
+completness <- read.csv("completness_summary_drep.tsv",sep="\t", header = FALSE)
+colnames(completness) <- c("accession","nonATGC","lengthOfSequence","nProp")
+seqs1 <- readDNAStringSet("03_combinedfasta.fasta")
+seqs2 <- readDNAStringSet("03_combinedfastawithoutYale.fasta")
+combinedmeta <- read.csv("04_combinedmeta.csv")
+combinedmetawithoutYale <- read.csv( "04_combinedmetawithoutYale.csv")
+
+completness$nProp <- completness$nProp*100
+summary(completness$nProp)
+
+combinedmeta <-S4Vectors::merge(combinedmeta, completness, by.x="accession", by.y="accession", all.x=TRUE, all.y=FALSE, sort=FALSE)
+combinedmetawithoutYale <-S4Vectors::merge(combinedmetawithoutYale, completness, by.x="accession", by.y="accession", all.x=TRUE, all.y=FALSE, sort=FALSE)
+
+
+## We will only retain sequences with nProp less than 5% and ensure we do not over filter the major lineages and minor lineages
+majorlineages <- unique(combinedmeta$major_lineage) 
+
+unique(subset(combinedmeta, nProp<5) %>% .[,5]) %>% length()
+combinedmeta <- subset(combinedmeta, nProp<5)
+combinedmetawithoutYale <- subset(combinedmetawithoutYale, nProp<5)
+
+## getting rid of sequences labelled as outgroup because they don't help in genotype assignment
+
+combinedmeta <- combinedmeta[!(grepl("Outgroup",combinedmeta$genotype,ignore.case = T)),]
+combinedmetawithoutYale <- combinedmetawithoutYale[!(grepl("Outgroup",combinedmetawithoutYale$genotype,ignore.case = T)),]
+
+seqs1 <- seqs1[intersect(names(seqs1),combinedmeta$accession)]
+seqs2 <- seqs2[intersect(names(seqs2),combinedmetawithoutYale$accession)]
+## replace the forward slash with underscore to make file naming easier
+names(seqs1) <-  gsub('/',"_",names(seqs1))
+names(seqs2) <-  gsub('/',"_",names(seqs2))
+combinedmeta$accession <- gsub('/',"_",combinedmeta$accession)
+combinedmetawithoutYale$accession <- gsub('/',"_",combinedmetawithoutYale$accession)
+writeXStringSet(seqs1, "05_Finalcombinedfasta.fasta")
+writeXStringSet(seqs2, "05_FinalcombinedfastawithoutYale.fasta")
+write.table(unique(combinedmeta[,1:6]), "05_Finalcombinedmeta.tsv", row.names = FALSE, quote = FALSE, sep="\t")
+write.table(unique(combinedmetawithoutYale[,1:6]), "05_FinalcombinedmetawithoutYale.tsv", row.names = FALSE,quote = FALSE, sep="\t")
+
+## We separately also did this
+# sed -i "s/Cote_d'Ivoire/Cote_dIvoire/g" filename
+```
+
+## Making MSA for virstrain indexes
+
+```{r}
+
+system(sprintf("mafft --auto --thread 50 %s > %s", "05_Finalcombinedfasta.fasta", "db/denv_0.8/mafft.aln"))
+system(sprintf("mafft --auto --thread 50 %s > %s", "05_FinalcombinedfastawithoutYale.fasta", "db/denvWithoutYale_0.8/mafft.aln"))
+```
+
+## Making database and indexes
+
+```
+
+virstrain_build -i mafft.aln -d . -s 0.6
+makeblastdb -in 03_combinedfasta.fasta -dbtype nucl -out denv_blastn_db -title "DENV_database"
+mamba create -n serotyper bioconda::samtools bioconda::seqkit bioconda::minimap2 bioconda::bwa-mem2 bioconda::samplot bioconda::covtobed bioconda::yacrd bioconda::minimap2 conda-forge::parallel bioconda::bcftools conda-forge::gsl bioconda::tabix bioconda::clair3 bioconda::blast  bioconda::hostile bioconda::nextflow multiqc csvkit align_trim
+```
+
