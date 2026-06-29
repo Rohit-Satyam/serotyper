@@ -1,3 +1,6 @@
+#!/bin/bash
+set -euo pipefail
+## exit immediately on exception
 
 ## Get the Virstrain best hit name
 first=$(grep '>' $1 | head -n 2 | grep Cluster | awk '{print $1}' | sed 's/>//g')
@@ -23,6 +26,5 @@ perc_baseCovered=$(echo "scale=2; ($COVERED_LENGTH * 100/ $Ref_genome_length) " 
 
 ## Making summary file for each sample with following columns
 
-serotype=$(grep $first $7)
-
+serotype=$(awk -F'\t' -v k="$first" '$1==k' "$7") ## update unanchored serotype lookup to exact match via awk
 echo "$6,$Ref_genome_length,$perc_baseCovered,$COVERED_LENGTH,$serotype" | tr ',' "\t" >> $6.serotype.txt
