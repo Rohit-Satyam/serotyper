@@ -1,0 +1,9 @@
+# Titles to use for the report.
+title: "serotyper"
+subtitle: "Summary & Statistics"
+intro_text: "MultiQC reports for Viral Sequencing Data."
+report_header_info:
+        - Analyzed by: 'serotyper@KAUST'
+## Change the output filenames
+output_fn_name: mqc_report.html
+data_dir_name: mqc_report_data
