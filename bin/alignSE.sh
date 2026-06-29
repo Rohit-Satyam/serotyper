@@ -19,7 +19,7 @@ covtobed -m 0 $6.bam > $6.covtobed.txt
 
 Ref_genome_length=${endCoord}
 COVERED_LENGTH=$(awk '$4 >= 20 {covered += $3 - $2} END {print covered}' $6.covtobed.txt)
-perc_baseCovered=$(echo "scale=2; ($COVERED_LENGTH / $Ref_genome_length) * 100" | bc)
+perc_baseCovered=$(echo "scale=2; ($COVERED_LENGTH * 100/ $Ref_genome_length)" | bc)
 
 ## Making summary file for each sample with following columns
 
