@@ -264,9 +264,9 @@ workflow{
         dehost_reads_ch = HOSTILE.out[0]
                 ch_versions = ch_versions.mix(HOSTILE.out.versions)
     }
-    
+
     // ------------------------------------------------------------------------
-    // Step 3: Prepare reads for serotype calling
+    // Step 3: Prepare QC'd reads for downstream analysis
     //
     // PE:
     //   optional FASTP trimming
@@ -274,16 +274,16 @@ workflow{
     // SE:
     //   optional YACRD scrubbing for chimeric read removal
     // ------------------------------------------------------------------------
-    reads_for_serotyping_ch = dehost_reads_ch
+    qc_reads_ch = dehost_reads_ch
 
     if (params.mode == "PE" && !params.skipTrim) {
         FASTP(dehost_reads_ch)
-        reads_for_serotyping_ch = FASTP.out[0]
+        qc_reads_ch = FASTP.out[0]
          ch_versions = ch_versions.mix(FASTP.out.versions)
     }
     else if (params.mode == "SE" && !params.skipScrubbing) {
         yacrd_out = YACRD(dehost_reads_ch)
-        reads_for_serotyping_ch = yacrd_out.scrubb
+        qc_reads_ch = yacrd_out.scrubb
         ch_versions = ch_versions.mix(YACRD.out.versions)
     }
 
@@ -295,7 +295,7 @@ workflow{
     //   aligned_out.serotype_contig_ordering -> tuple(sample_id, reference_fasta)
     //   aligned_out.serotyper_res            -> result files for per-sample summary
     // ------------------------------------------------------------------------
-    virstrain_out = VIRSTRAIN_CALL(reads_for_serotyping_ch, virstrain_db_ch)
+    virstrain_out = VIRSTRAIN_CALL(qc_reads_ch, virstrain_db_ch)
     aligned_out   = VIRSTRAIN_ALIGN_BESTMATCH(virstrain_out.report_for_align, mafft_meta_ch)
 
     assemble_reads_ch = aligned_out.viral_reads
@@ -387,7 +387,7 @@ workflow{
         refs_ch     = Channel.fromPath("${params.referenceDir}/*.fasta", checkIfExists: true).collect()
         all_refs_ch = CONCATREFS(refs_ch)
 
-        mapped_and_selected = MAP_AND_SELECT_CONTIGS(dehost_reads_ch, all_refs_ch.combinedrefs)
+        mapped_and_selected = MAP_AND_SELECT_CONTIGS(qc_reads_ch, all_refs_ch.combinedrefs)
 
         /*
          * selected_contigs_ch emits:
@@ -421,7 +421,7 @@ workflow{
     if (params.mode == "SE" && !params.skipReferenceAssembly) {
 
         ALIGNTOREFERENCE(
-            dehost_reads_ch,
+            qc_reads_ch,
             Channel.fromPath(params.referenceDir, type: 'any', checkIfExists: true)
         )
 
@@ -434,14 +434,14 @@ workflow{
 
         // Perform optional primer trimming before Clair3-based consensus creation
         if (params.skipPrimertrim) {
-            CLAIR3(ALIGNTOREFERENCE.out[1]) 
+            CLAIR3(ALIGNTOREFERENCE.out[1])
             MAKEREFBASEDASSEMBLY(CLAIR3.out[0])
         }
         else {
             trim_res = ALIGNTRIM(ALIGNTOREFERENCE.out[1])
-            CLAIR3(trim_res.trimmed) 
+            CLAIR3(trim_res.trimmed)
             MAKEREFBASEDASSEMBLY(CLAIR3.out[0])
-            
+
         }
         ch_versions = ch_versions.mix(CLAIR3.out.versions)
         ch_versions = ch_versions.mix(MAKEREFBASEDASSEMBLY.out.versions)
