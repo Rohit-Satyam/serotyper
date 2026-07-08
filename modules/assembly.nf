@@ -12,16 +12,16 @@ process RNAVIRALSPADES{
     output:
         tuple val("${sid}"), path("${sid}.scaffolds.fasta")
         tuple val("${sid}"), path("${sid}.ragtag.scaffold.fasta")
-        path("*.gfa")
-        path("*.log")
-        path("*.png")
-        path("*.html")
-        path("*.tsv")
+        path("*.gfa"), optional: true
+        path("*.log"), optional: true
+        path("*.png"), optional: true
+        path("*.html"), optional: true
+        path("*.tsv"), optional: true
         path "versions.yml", emit: versions
 
     script:
    def spades_ext = params.spades_ext ? params.spades_ext : ""
-   def assemble_cmd = mode == 'PE'
+   def assemble_cmd = params.mode == 'PE'
         ? """
           rnaviralspades.py -1 ${reads[0]} -2 ${reads[1]} --threads ${task.cpus} -o . ${spades_ext}
           """
@@ -39,15 +39,18 @@ process RNAVIRALSPADES{
     ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[2]} ${sid}.scaffolds.fasta
     awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
     
+    ## progressiveMauve (invoked by pgv-pmauve) is prone to segfaulting on
+    ## some systems; tolerate its failure so a valid assembly is still
+    ## published even when the comparison plot cannot be generated.
     pgv-pmauve ${reads[2]} ${sid}.ragtag.scaffold.fasta \
    -o pgmauve --block_cmap viridis --track_align_type left  \
-   --show_scale_xticks --curve
+   --show_scale_xticks --curve || echo "WARNING: pgv-pmauve failed; skipping mauve visualization" >&2
 
-    [ -f pgmauve/result.png ]        && mv pgmauve/result.png ${prefix}.mauveresult.png
-    [ -f pgmauve/align_coords.tsv ]  && mv pgmauve/align_coords.tsv ${prefix}.mauvealign_coords.tsv
-    [ -f pgmauve/result.html ]       && mv pgmauve/result.html ${prefix}.mauveresult.html
-    [ -f pgmauve/pgv-cli.log ]       && mv pgmauve/pgv-cli.log ${prefix}.mauve.log
-    
+    [ -f pgmauve/result.png ]        && mv pgmauve/result.png ${sid}.mauveresult.png
+    [ -f pgmauve/align_coords.tsv ]  && mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
+    [ -f pgmauve/result.html ]       && mv pgmauve/result.html ${sid}.mauveresult.html
+    [ -f pgmauve/pgv-cli.log ]       && mv pgmauve/pgv-cli.log ${sid}.mauve.log
+
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
       rnaviralspades: \$(rnaviralspades.py --version 2>&1 | sed 's/.*SPAdes genome assembler v//; s/ .*//')
@@ -69,27 +72,30 @@ process UNICYCLER{
     output:
     tuple val("${sid}"), path("${sid}.scaffolds.fasta")
     tuple val("${sid}"), path("${sid}.ragtag.scaffold.fasta")
-    path("*.gfa")
-    path("*.log")
-    path("*.png")
-    path("*.html")
-    path("*.tsv")
+    path("*.gfa"), optional: true
+    path("*.log"), optional: true
+    path("*.png"), optional: true
+    path("*.html"), optional: true
+    path("*.tsv"), optional: true
     path "versions.yml", emit: versions
 
     script:
-    def assemble_cmd = mode == 'PE'
+    def assemble_cmd = params.mode == 'PE'
         ? "unicycler -1 ${reads[0]} -2 ${reads[1]} -o . --linear_seqs 1 --keep 0"
         : "unicycler -l ${reads[0]} -o . --linear_seqs 1 --keep 0"
 
-    def downstream = mode == 'PE'
+    def downstream = params.mode == 'PE'
         ? """
           ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[2]} ${sid}.scaffolds.fasta
 
           awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.ragtag.scaffold.fasta
 
+          ## progressiveMauve (invoked by pgv-pmauve) is prone to segfaulting
+          ## on some systems; tolerate its failure so a valid assembly is
+          ## still published even when the comparison plot cannot be generated.
           pgv-pmauve ${reads[2]} ${sid}.ragtag.scaffold.fasta \\
           -o pgmauve --block_cmap viridis --track_align_type left  \\
-          --show_scale_xticks --curve
+          --show_scale_xticks --curve || echo "WARNING: pgv-pmauve failed; skipping mauve visualization" >&2
 
         [ -f pgmauve/result.png ]       && mv pgmauve/result.png ${sid}.mauveresult.png
         [ -f pgmauve/align_coords.tsv ] && mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
@@ -130,11 +136,11 @@ process FLYE{
     output:
     tuple val("${sid}"), path("${sid}.scaffolds.fasta")
     tuple val("${sid}"), path("${sid}.racon_ragtag_scaffold.fasta")
-    path("*.gfa")
-    path("*.log")
-    path("*.png")
-    path("*.html")
-    path("*.tsv")
+    path("*.gfa"), optional: true
+    path("*.log"), optional: true
+    path("*.png"), optional: true
+    path("*.html"), optional: true
+    path("*.tsv"), optional: true
     path "versions.yml", emit: versions
 
     script:
@@ -158,14 +164,17 @@ mv flye.log ${sid}.flye.log
 ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[0]} ${sid}.racon.consensus.fasta
 awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.racon_ragtag_scaffold.fasta
 
+## progressiveMauve (invoked by pgv-pmauve) is prone to segfaulting on some
+## systems; tolerate its failure so a valid assembly is still published even
+## when the comparison plot cannot be generated.
 pgv-pmauve ${reads[0]} ${sid}.racon_ragtag_scaffold.fasta \
  -o pgmauve --block_cmap viridis --track_align_type left  \
- --show_scale_xticks --curve
+ --show_scale_xticks --curve || echo "WARNING: pgv-pmauve failed; skipping mauve visualization" >&2
 
-mv pgmauve/result.png ${sid}.mauveresult.png
-mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
-mv pgmauve/result.html ${sid}.mauveresult.html
-mv pgmauve/pgv-cli.log ${sid}.mauve.log
+[ -f pgmauve/result.png ]       && mv pgmauve/result.png ${sid}.mauveresult.png
+[ -f pgmauve/align_coords.tsv ] && mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
+[ -f pgmauve/result.html ]      && mv pgmauve/result.html ${sid}.mauveresult.html
+[ -f pgmauve/pgv-cli.log ]      && mv pgmauve/pgv-cli.log ${sid}.mauve.log
 
 cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -191,11 +200,11 @@ process CANU{
     output:
     tuple val("${sid}"), path("${sid}.contigs.fasta")
     tuple val("${sid}"), path("${sid}.racon_ragtag_scaffold.fasta")
-    path("*.err")
-    path("*.log")
-    path("*.png")
-    path("*.html")
-    path("*.tsv")
+    path("*.err"), optional: true
+    path("*.log"), optional: true
+    path("*.png"), optional: true
+    path("*.html"), optional: true
+    path("*.tsv"), optional: true
     path "versions.yml", emit: versions
 
     script:
@@ -225,14 +234,17 @@ mv ${sid}.seqStore.err ${sid}.err
 ragtag.py scaffold -t ${task.cpus} -o temp  ${reads[0]} ${sid}.racon.consensus.fasta
 awk -v seq="${sid}" '/^>/ {print ">" seq "." ++i; next} {print}'  temp/ragtag.scaffold.fasta > ${sid}.racon_ragtag_scaffold.fasta
 
+## progressiveMauve (invoked by pgv-pmauve) is prone to segfaulting on some
+## systems; tolerate its failure so a valid assembly is still published even
+## when the comparison plot cannot be generated.
 pgv-pmauve ${reads[0]} ${sid}.racon_ragtag_scaffold.fasta \
  -o pgmauve --block_cmap viridis --track_align_type left  \
- --show_scale_xticks --curve
+ --show_scale_xticks --curve || echo "WARNING: pgv-pmauve failed; skipping mauve visualization" >&2
 
-mv pgmauve/result.png ${sid}.mauveresult.png
-mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
-mv pgmauve/result.html ${sid}.mauveresult.html
-mv pgmauve/pgv-cli.log ${sid}.mauve.log
+[ -f pgmauve/result.png ]       && mv pgmauve/result.png ${sid}.mauveresult.png
+[ -f pgmauve/align_coords.tsv ] && mv pgmauve/align_coords.tsv ${sid}.mauvealign_coords.tsv
+[ -f pgmauve/result.html ]      && mv pgmauve/result.html ${sid}.mauveresult.html
+[ -f pgmauve/pgv-cli.log ]      && mv pgmauve/pgv-cli.log ${sid}.mauve.log
 
  cat <<-END_VERSIONS > versions.yml
     "${task.process}":

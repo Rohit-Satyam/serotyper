@@ -29,7 +29,7 @@ awk '{print $2}' temp1 | parallel -j 1 "grep {} !{params.mafftMeta}" > temp2
 paste temp1 temp2 > !{sid}.blastN_results.tsv
 
  cat <<-END_VERSIONS > versions.yml
-    "${task.process}":
+    "!{task.process}":
       blastn: \$(blastn -version 2>&1 | head -n 1 | sed 's/^blastn: //')
       parallel: \$(parallel --version 2>&1 | head -n 1 | sed 's/^GNU parallel //')
     END_VERSIONS

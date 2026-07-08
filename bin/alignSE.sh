@@ -3,7 +3,12 @@ set -euo pipefail
 ## exit immediately on exception
 
 ## Get the Virstrain best hit name
+## pipefail is disabled here because `head -n 2` intentionally closes its
+## read end early, which otherwise sends SIGPIPE (exit 141) to `grep '>'`
+## whenever the report lists more than two candidate clusters.
+set +o pipefail
 first=$(grep '>' $1 | head -n 2 | grep Cluster | awk '{print $1}' | sed 's/>//g')
+set -o pipefail
 seqkit grep -p $first $2 | sed '/^>/! s/-//g' | awk '/^>/ {print (NR==1?"":"\n")$0; next} {printf "%s", $0} END {print ""}' | fold -w 60 > ${6}.${first}.fasta ## Ensuring we don't mess up dash in the header
 
 

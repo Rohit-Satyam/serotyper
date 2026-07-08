@@ -3,7 +3,12 @@ set -euo pipefail
 ## exit immediately on exception
 
 ## Get the Virstrain best hit name
+## pipefail is disabled here because `head -n 2` intentionally closes its
+## read end early, which otherwise sends SIGPIPE (exit 141) to `grep '>'`
+## whenever the report lists more than two candidate clusters.
+set +o pipefail
 first=$(grep '>' $1 | head -n 2 | grep Cluster | awk '{print $1}' | sed 's/>//g')
+set -o pipefail
 seqkit grep -p $first $2 | sed '/^>/! s/-//g' | awk '/^>/ {print (NR==1?"":"\n")$0; next} {printf "%s", $0} END {print ""}' | fold -w 60 > ${6}.${first}.fasta ## Ensuring we don't mess up dash in the header
 
 
@@ -12,7 +17,11 @@ samtools faidx ${6}.${first}.fasta
 endCoord=$(awk '{print $2}' ${6}.${first}.fasta.fai)
 bwa-mem2 mem -t $3 ${6}.${first}.fasta  $4 $5 2> $first.bwa.output.log | samtools sort --threads $3 - |samtools view -F 4 --threads $3 -bS -o $6.bam
 
-samtools fastq -1 ${6}.R1.fq -2 ${6}.R2.fq -n $6.bam
+## -f 2 (properly paired) ensures both mates are always present so R1/R2
+## read counts stay in sync; without it a mapped singleton whose mate is
+## unmapped lands in only one of the two files and breaks downstream
+## assemblers expecting matched pairs.
+samtools fastq -1 ${6}.R1.fq -2 ${6}.R2.fq -f 2 -n $6.bam
 gzip ${6}.R1.fq
 gzip ${6}.R2.fq
 

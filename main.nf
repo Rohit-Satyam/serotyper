@@ -319,13 +319,21 @@ workflow{
     // This combines:
     //   - serotype-filtered reads
     //   - serotype-specific reference / contig ordering file
+    //
+    // NOTE: assemble_reads_ch and aligned_out.serotype_contig_ordering are
+    // joined explicitly by sample_id (rather than .mix() + groupTuple()) so
+    // that the resulting file order is deterministic. Downstream assembly
+    // processes index into this list positionally: PE assemblers
+    // (UNICYCLER/RNAVIRALSPADES) expect [reads..., reference], while SE
+    // assemblers (CANU/FLYE) expect [reference, reads...].
     // ------------------------------------------------------------------------
     assemble_reads_ch
-        .mix(aligned_out.serotype_contig_ordering)
-        .flatMap { sample_id, files ->
-            files instanceof List ? files.collect { [sample_id, it] } : [[sample_id, files]]
+        .join(aligned_out.serotype_contig_ordering)
+        .map { sample_id, reads, ref ->
+            def readList = reads instanceof List ? reads : [reads]
+            def refList  = ref instanceof List ? ref : [ref]
+            tuple(sample_id, params.mode == 'PE' ? readList + refList : refList + readList)
         }
-        .groupTuple(by: 0)
         .set { assembly_ch }
 
     // ------------------------------------------------------------------------
