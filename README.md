@@ -1117,6 +1117,3 @@ When publishing results generated with SeroTyper, cite:
 
 ---
 
-## License
-
-No explicit license file was present in the reviewed v0.3 archive. Before redistribution or incorporation into another project, add or verify the repository’s licensing terms.
