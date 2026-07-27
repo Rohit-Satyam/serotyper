@@ -1,0 +1,81 @@
+Serotyper Academic Use and Attribution License, Version 1.0
+
+Copyright (c) 2026 [ROHIT SATYAM]
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the Serotyper workflow and its associated source code, scripts,
+configuration files, documentation, and related materials (collectively, the
+"Software"), to use, copy, run, study, modify, merge, publish, and distribute
+the Software, including modified versions, subject to the following conditions:
+
+1. Preservation of notices
+
+   Any copy or substantial portion of the Software, whether modified or
+   unmodified, must retain this copyright notice, this license, and any
+   existing attribution or citation information supplied with the Software.
+
+2. Research acknowledgment and citation
+
+   Any scholarly article, preprint, conference paper, poster, thesis,
+   dissertation, technical report, public research dataset, or other research
+   output that reports results produced in whole or in material part through
+   use of the Software must acknowledge Serotyper and cite the Software or its
+   associated publication.
+
+   Until a formal software publication or archival citation is supplied, the
+   following acknowledgment may be used:
+
+   "This work used the Serotyper Nextflow workflow developed by
+   [ROHIT SATYAM/PATHOGEN GENOMICS LABORATORY]."
+
+   Recommended citation:
+
+   [https://github.com/Rohit-Satyam/serotyper/tree/v0.3]
+
+3. Modified versions
+
+   Modified versions may be distributed, provided that they:
+
+   a. clearly state that changes were made;
+   b. identify the date or version of the modification where reasonably
+      practical;
+   c. do not imply endorsement by the original author or institution; and
+   d. retain the acknowledgment and citation requirement in Section 2 for
+      research outputs that use the original Software or a derivative work.
+
+4. Names and endorsement
+
+   The names "Serotyper," the copyright holder, contributors, and affiliated
+   institutions may not be used to endorse or promote products derived from
+   the Software without prior written permission, except for factual
+   attribution or citation.
+
+5. Third-party components
+
+   This license applies only to original material distributed as part of
+   Serotyper. External software, reference databases, containers, libraries,
+   and other third-party components remain subject to their respective
+   licenses and terms of use.
+
+6. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, NON-INFRINGEMENT, OR FITNESS FOR
+   CLINICAL OR DIAGNOSTIC USE. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+   CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. Acceptance and termination
+
+   By exercising any permission granted under this license, you agree to its
+   terms. Your rights under this license terminate automatically if you fail
+   to comply with its conditions. Rights may be reinstated upon correction of
+   the violation and written confirmation from the copyright holder.
+
+8. Separate permissions
+
+   Uses not permitted by this license may be authorized separately in writing
+   by the copyright holder.
