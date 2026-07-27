@@ -6,6 +6,8 @@
 
 **SeroTyper** is a Nextflow DSL2 workflow for identifying viral serotypes from either:
 
+> Note: This pipeline is still under development. This is the first stable release; however, minor issues need to be addressed.
+
 - Illumina paired-end reads (`--mode PE`), or
 - Oxford Nanopore Technologies (ONT) single-end reads (`--mode SE`).
 
