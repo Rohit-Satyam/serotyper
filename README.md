@@ -1050,22 +1050,14 @@ This is intentional in v0.3. The global process strategy is `errorStrategy = 'ig
 
 ---
 
-## Known implementation notes
+## Notes to self
 
-These notes describe the behavior of the supplied v0.3 code and are important when planning analyses:
+These notes describe the behavior of the supplied v0.3 code:
 
-1. **Per-process errors are globally ignored.** A completed workflow does not guarantee that every sample completed every branch.
-2. **Reference-based consensus is orchestrated only for `SE` data.** There is no PE reference-consensus path in `main.nf`.
-3. **`--skipAlignment` is not used.** It is validated only to emit a warning.
-4. **`--jobs` is documented but does not directly control concurrency.** Use Nextflow executor settings instead.
-5. **`--chimeric_ext` appears in help text but is not used by the current workflow.** YACRD-related options are `--scrubb_ext` and `--yacrd_ext`.
-6. **Coinfection reference discovery expects `.fasta` files.** `.fa` and `.fas` files are not included by that branch’s current glob.
-7. **Some module files assign `params.cpus`, `params.memory`, and `params.outdir` at module scope.** Confirm effective values in the execution trace/report when applying custom resources.
-8. **Post-trim FastQC exists as a module but is not called by `main.nf`.** The current PE path runs raw FastQC/MultiQC and fastp reports.
-9. **The environment file is an exported, highly pinned environment.** It includes a machine-specific `prefix` and may require editing or regeneration on another system.
-10. **Default paths in `nextflow.config` are site-specific.** Portable runs should override all input, output, database, model, and reference paths on the command line or through a profile.
-11. **Low-depth samples can disappear from downstream channels.** This may be expected but should be reported explicitly in downstream interpretation.
-12. **The VirStrain coverage summary uses a fixed 20× threshold.** This is distinct from `--cov`, which is used to mask low-coverage regions in the reference-consensus branch.
+1. **Per-process errors are globally ignored.** A completed workflow does not guarantee that every sample completed every branch. This is intentional as some poor quality clinical samples might fail in certain steps.
+2. **Reference-based consensus is orchestrated only for `SE` data.** There is no PE reference-consensus path in `main.nf`. This will be enabled in the future.
+3. **Default paths in `nextflow.config` are site-specific.** Portable runs should override all input, output, database, model, and reference paths on the command line or through a profile.
+4. **Low-depth samples can disappear from downstream channels.** This may be expected but should be reported explicitly in downstream interpretation.
 
 ---
 
@@ -1119,10 +1111,7 @@ When publishing results generated with SeroTyper, cite:
 - SeroTyper, including the release or Git commit used;
 - Nextflow;
 - VirStrain;
-- all enabled analysis tools, such as FastQC, MultiQC, fastp, Hostile, YACRD, BWA-MEM2, Minimap2/mm2plus, Samtools, SeqKit, Unicycler, SPAdes, Canu, Flye, RagTag, Clair3, BCFtools, BLAST+, and pycoQC;
-- the source and release of the viral reference database and metadata.
-
-Add the project’s preferred formal citation here when available.
+- all enabled analysis tools, such as FastQC, MultiQC, fastp, Hostile, YACRD, BWA-MEM2, Minimap2/mm2plus, Samtools, SeqKit, Unicycler, SPAdes, Canu, Flye, RagTag, Clair3, BCFtools, BLAST+, and pycoQC.
 
 ---
 
