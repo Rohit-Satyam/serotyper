@@ -18,7 +18,7 @@ process FASTP{
         path("${sid}.fastp.html")
         path "*.log"
         path "*.txt"
-        path "versions.yml"
+        path "versions.yml", emit: versions
 
     script:
     fq_1_paired = sid + '_trim_R1.fastq.gz'
@@ -30,19 +30,11 @@ process FASTP{
     def trimmed_file = ""
 
     if ("${params.mode}" == "PE") {
-        fastp_input = """
-        --in1 ${reads[0]} \
-        --in2 ${reads[1]} \
-        --out1 ${fq_1_paired} \
-        --out2 ${fq_2_paired}
-        """
+        fastp_input = "--in1 ${reads[0]} --in2 ${reads[1]} --out1 ${fq_1_paired} --out2 ${fq_2_paired}"
         trimmed_file = fq_1_paired
     }
     else if ("${params.mode}" == "SE") {
-        fastp_input = """
-        --in1 ${reads} \
-        -o ${sid}.trim.fastq.gz
-        """
+        fastp_input = "--in1 ${reads} -o ${sid}.trim.fastq.gz"
         trimmed_file = "${sid}.trim.fastq.gz"
     }
 

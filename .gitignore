@@ -1,0 +1,7 @@
+data/*
+.nextflow/*
+.nextflow.log*
+pr6.md
+db/*
+results_test/*
+work/*
